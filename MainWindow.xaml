@@ -4,9 +4,20 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:MultipleMusicPlayer"
+        xmlns:musicclass="clr-namespace:MultipleMusicPlayer.Music"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="MainWindow" Height="450" Width="800" Loaded="Window_Loaded">
+    <Grid x:Name="musicListPanel" d:DataContext="{d:DesignInstance musicclass:MusicList}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="25*"/>
+            <RowDefinition Height="171*"/>
+            <RowDefinition Height="21*"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="117*"/>
+            <ColumnDefinition Width="283*"/>
+        </Grid.ColumnDefinitions>
+        <ListBox Grid.Row="1" ItemsSource="{Binding FileList}" DisplayMemberPath="Name"></ListBox>
 
     </Grid>
 </Window>

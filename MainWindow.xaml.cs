@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MultipleMusicPlayer.Music;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -20,9 +21,15 @@ namespace MultipleMusicPlayer
     /// </summary>
     public partial class MainWindow : Window
     {
+        private readonly MusicList musicList = new MusicList();
         public MainWindow()
         {
             InitializeComponent();
+        }
+
+        private void Window_Loaded(object sender, RoutedEventArgs e) {
+            musicList.AddDirectory("E:/kugou/");
+            musicListPanel.DataContext = musicList;
         }
     }
 }
