@@ -1,44 +1,41 @@
 ﻿using MultipleMusicPlayer.Buffer;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 
 namespace MultipleMusicPlayer.Sound {
-    class PortaudioSound {
+    internal class PortaudioSound {
         private bool isInitialize = false;
         private IntPtr stream;
         private IBuffer outBuffer;
-        private IBufferState outBufferState = new BufferState();
+        private readonly IBufferState outBufferState = new BufferState();
         private PaStreamCallback streamCallback;
         private int channel;
         private static readonly long[] rest = { 0, 0, 0, 0, 0, 0, 0, 0 };
         private int bps;
+        private int state;
         public Error Initialize() {
             isInitialize = true;
             return Pa_Initialize();
         }
         public Error OpenDefaultOutputStream(int numOutputChannels, double sampleRate, uint sampleSize, out IBuffer buffer) {
-            PaSampleFormat sampleFormat;
             bps = (int)sampleSize;
-            switch (bps) {
-                case 8:
-                    sampleFormat = PaSampleFormat.paInt8;
-                    break;
-                case 16:
-                    sampleFormat = PaSampleFormat.paInt16;
-                    break;
-                case 24:
-                    sampleFormat = PaSampleFormat.paInt24;
-                    break;
-                case 32:
-                    sampleFormat = PaSampleFormat.paInt32;
-                    break;
-                default:
-                    buffer = null;
-                    return Error.paSampleFormatNotSupported;
+            PaSampleFormat sampleFormat = bps switch
+            {
+                8 => PaSampleFormat.paInt8,
+                16 => PaSampleFormat.paInt16,
+                24 => PaSampleFormat.paInt24,
+                32 => PaSampleFormat.paInt32,
+                _ => PaSampleFormat.paCustomFormat
+            };
+            if (sampleFormat == PaSampleFormat.paCustomFormat) {
+                buffer = null;
+                return Error.paSampleFormatNotSupported;
             }
             buffer = outBuffer = new Buffer.Buffer(256 * numOutputChannels * bps / 8);
             outBuffer.SetEndOfBuffer(new BufferState { AbsolutePosition = 256 * numOutputChannels * 20 });
@@ -48,39 +45,72 @@ namespace MultipleMusicPlayer.Sound {
             return Pa_OpenDefaultStream(ref stream, 0, numOutputChannels, sampleFormat, sampleRate, 256, streamCallback, IntPtr.Zero);
         }
         public Error StartStream() {
+            state = 0;
             return Pa_StartStream(stream);
         }
+        public void Stop() {
+            state |= 0b01;
+            while (state != 0) {
+                Thread.Sleep(1);
+            }
+            outBuffer = null;
+        }
+
+        public void Abort() {
+            state |= 0b10;
+            while (state != 0) {
+                Thread.Sleep(1);
+            }
+            outBuffer = null;
+        }
+
         private PaStreamCallbackResult StreamCallback(IntPtr input, IntPtr output, uint frameCount, ref PaStreamCallbackTimeInfo timeInfo, PaStreamCallbackFlags statusFlags, IntPtr userData) {
-            if (outBuffer.IsFull(outBufferState)) {
-                outBufferState.Info(start: 0, length: (int)frameCount * channel * bps / 8);
-                outBuffer.Read(output, outBufferState);
-                bool success;
-                int start, length;
-                (success, start, length, _, _) = outBufferState.Info();
-                if (success) {
-                    outBuffer.DeleteOperate(outBufferState);
-                } else {
+            if ((state & 0b10) == 0b10) {
+                state = 0;
+                return PaStreamCallbackResult.paAbort;
+            }
+            if (!outBuffer.IsFull(outBufferState)) {
+                if ((state & 0b01) == 0b01) {
+                    state = 0;
+                    return PaStreamCallbackResult.paComplete;
+                }
 #if DEBUG
-                    Console.WriteLine("发生了不可能错误！");
+                Debug.WriteLine("解码速度过慢！");
 #endif
-                    for (int i = 0; i < length; i++) {
-                        Marshal.WriteByte(output, start, 0);
-                    }
-                }
-                if (outBuffer.IsEndOfBuffer(outBufferState)) {
-                    outBufferState.AbsolutePosition = 0;
-                }
+                //outBufferState.AbsolutePosition -= 256 * channel * bps / 8;
+                //if ((state & 0b01) == 0b01) {
+                //    state = 0;
+                //    return PaStreamCallbackResult.paComplete;
+                //}
+            }
+            outBufferState.Info(start: 0, length: (int)frameCount * channel * bps / 8);
+            outBuffer.Read(output, outBufferState);
+            bool success;
+            int start, length;
+            (success, start, length, _, _) = outBufferState.Info();
+            if (success) {
+                outBuffer.DeleteOperate(outBufferState);
             } else {
 #if DEBUG
-                Console.WriteLine("解码速度过慢！");
+                Console.WriteLine("发生了不可能错误！");
 #endif
-                int times = rest.Length * 8;
-                IntPtr ptr;
-                for (int i = 0; i < frameCount * channel / times; i++) {
-                    ptr = new IntPtr(output.ToInt64() + i * times);
-                    Marshal.Copy(rest, 0, ptr, rest.Length);
+                for (int i = 0; i < length; i++) {
+                    Marshal.WriteByte(output, start, 0);
                 }
             }
+            if (outBuffer.IsEndOfBuffer(outBufferState)) {
+                outBufferState.AbsolutePosition = 0;
+            }
+            //int times = rest.Length * 8;
+            //IntPtr ptr;
+            //for (int i = 0; i < frameCount * channel / times; i++) {
+            //    ptr = new IntPtr(output.ToInt64() + i * times);
+            //    Marshal.Copy(rest, 0, ptr, rest.Length);
+            //}
+            //if ((state & 0b01) == 0b01) {
+            //    state = 0;
+            //    return PaStreamCallbackResult.paComplete;
+            //}
             return PaStreamCallbackResult.paContinue;
         }
         public string GetErrorText(Error errorCode) {
@@ -96,11 +126,11 @@ namespace MultipleMusicPlayer.Sound {
             }
         }
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-        private delegate PaStreamCallbackResult PaStreamCallback(IntPtr input, IntPtr output, UInt32 frameCount, ref PaStreamCallbackTimeInfo timeInfo, PaStreamCallbackFlags statusFlags, IntPtr userData);
+        private delegate PaStreamCallbackResult PaStreamCallback(IntPtr input, IntPtr output, uint frameCount, ref PaStreamCallbackTimeInfo timeInfo, PaStreamCallbackFlags statusFlags, IntPtr userData);
         [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern Error Pa_Initialize();
         [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
-        private static extern Error Pa_OpenDefaultStream(ref IntPtr stream, int numInputChannels, int numOutputChannels, PaSampleFormat sampleFormat, double sampleRate, UInt32 framesPerBuffer, PaStreamCallback streamCallback, IntPtr userData);
+        private static extern Error Pa_OpenDefaultStream(ref IntPtr stream, int numInputChannels, int numOutputChannels, PaSampleFormat sampleFormat, double sampleRate, uint framesPerBuffer, PaStreamCallback streamCallback, IntPtr userData);
         [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern Error Pa_GetSampleSize(PaSampleFormat format);
         [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]

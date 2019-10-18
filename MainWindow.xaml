@@ -6,7 +6,7 @@
         xmlns:local="clr-namespace:MultipleMusicPlayer"
         xmlns:musicclass="clr-namespace:MultipleMusicPlayer.Music"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800" Loaded="Window_Loaded">
+        Title="MainWindow" Height="450" Width="800" Loaded="Window_Loaded" Closing="Window_Closing">
     <Grid x:Name="musicListPanel" d:DataContext="{d:DesignInstance musicclass:MusicList}">
         <Grid.RowDefinitions>
             <RowDefinition Height="25*"/>

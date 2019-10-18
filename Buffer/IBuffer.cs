@@ -17,7 +17,7 @@ namespace MultipleMusicPlayer.Buffer {
         bool IsEndOfBuffer(IBufferState bufferState);
         void SetEndOfBuffer(IBufferState bufferState);
         bool IsInterrupt();
-        void SetInterrupt();
+        void SetInterrupt(bool interrupt);
         void Clear();
         object UserData { get; set; }
     }

@@ -7,7 +7,7 @@ using System.Text;
 using System.Threading;
 
 namespace MultipleMusicPlayer.Decoder {
-    class FlacDecoder {
+    internal class FlacDecoder {
         private IntPtr decoder = IntPtr.Zero;
         private FLAC__StreamDecoderReadCallback readCallbackFunction;
         private FLAC__StreamDecoderSeekCallback seekCallbackFunction;
@@ -40,20 +40,28 @@ namespace MultipleMusicPlayer.Decoder {
         }
         public bool Initialize() {
             decoder = FLAC__stream_decoder_new();
-            if (decoder.Equals(IntPtr.Zero)) {
-                return false;
-            }
-            return true;
+            return !decoder.Equals(IntPtr.Zero);
         }
         public bool Set_md5_checking(bool value) {
             int val = value ? 1 : 0;
-            if (FLAC__stream_decoder_set_md5_checking(decoder, val) == 0) {
-                return false;
-            }
-            return true;
+            return FLAC__stream_decoder_set_md5_checking(decoder, val) != 0;
         }
         public void StartUntilEndOfStream() {
-            FLAC__stream_decoder_process_until_end_of_stream(decoder);
+            _ = FLAC__stream_decoder_process_until_end_of_stream(decoder);
+            if (playing) {
+                portaudioSound.Stop();
+            }
+            _ = portaudioSound.Terminate();
+            writeBuffer = null;
+            playing = false;
+            writeBufferState.AbsolutePosition = 0;
+        }
+        public void Abort() {
+            if (playing) {
+                portaudioSound.Abort();
+            }
+            playing = false;
+            readBuffer.SetInterrupt(true);
         }
         public void Seek(int sample) {
             seekSample = sample;
@@ -110,7 +118,7 @@ namespace MultipleMusicPlayer.Decoder {
                         bytes = (uint)readLength;
                         return FLAC__StreamDecoderReadStatus.FLAC__STREAM_DECODER_READ_STATUS_CONTINUE;
                     }
-                    if (!complete) {
+                    if (!readBuffer.IsFull(readBufferState)) {
                         Thread.Sleep(1);
                     }
                 } while (!complete);
@@ -132,8 +140,10 @@ namespace MultipleMusicPlayer.Decoder {
         }
 
         private FLAC__StreamDecoderTellStatus TellCallbackFunction(IntPtr decoder, ref ulong absolute_byte_offset, IntPtr client_data) {
-            absolute_byte_offset = (ulong)readBufferState.AbsolutePosition;
-            return FLAC__StreamDecoderTellStatus.FLAC__STREAM_DECODER_TELL_STATUS_OK;
+            lock (work) {
+                absolute_byte_offset = (ulong)readBufferState.AbsolutePosition;
+                return FLAC__StreamDecoderTellStatus.FLAC__STREAM_DECODER_TELL_STATUS_OK;
+            }
         }
         private FLAC__StreamDecoderLengthStatus LengthCallbackFunction(IntPtr decoder, ref ulong stream_length, IntPtr client_data) {
             lock (work) {
@@ -157,36 +167,32 @@ namespace MultipleMusicPlayer.Decoder {
             }
         }
         private FLAC__StreamDecoderWriteStatus WriteCallbackFunction(IntPtr decoder, IntPtr frame, IntPtr buffer, IntPtr client_data) {
-            if (readBuffer.UserData is ICallback callback) {
-                callback.GetProgress()?.Invoke((int)FLAC__frame_sample_number(frame));
-            }
-            int channels = (int)FLAC__frame_channels(frame);
-            if (writeBuffer == null) {
-                portaudioSound.OpenDefaultOutputStream(channels, FLAC__frame_sample_rate(frame), bps, out writeBuffer);
-            }
-            uint blocksize = FLAC__frame_blocksize(frame);
-            long maxSize = blocksize * bps / 8 * channels;
-            if (maxSize > tempByte.Length) {
-                tempByte = new byte[maxSize];
-            }
-            int writePosition = 0;
-            IntPtr[] data = new IntPtr[channels];
-            for (int i = 0; i < channels; i++) {
-                data[i] = new IntPtr(Marshal.ReadInt64(buffer, i * 8));
-            }
-            for (int i = 0; i < blocksize; i++) {
-                for (int j = 0; j < channels; j++) {
-                    for (int k = 0; k < bps / 8; k++) {
-                        tempByte[writePosition++] = Marshal.ReadByte(data[j], i * 4 + k);
+            lock (work) {
+                if (readBuffer.UserData is ICallback callback) {
+                    callback.GetProgress()?.Invoke((int)FLAC__frame_sample_number(frame));
+                }
+                int channels = (int)FLAC__frame_channels(frame);
+                if (writeBuffer == null) {
+                    portaudioSound.OpenDefaultOutputStream(channels, FLAC__frame_sample_rate(frame), bps, out writeBuffer);
+                }
+                uint blocksize = FLAC__frame_blocksize(frame);
+                long maxSize = blocksize * bps / 8 * channels;
+                if (maxSize > tempByte.Length) {
+                    tempByte = new byte[maxSize];
+                }
+                int writePosition = 0;
+                IntPtr[] data = new IntPtr[channels];
+                for (int i = 0; i < channels; i++) {
+                    data[i] = new IntPtr(Marshal.ReadInt64(buffer, i * 8));
+                }
+                for (int i = 0; i < blocksize; i++) {
+                    for (int j = 0; j < channels; j++) {
+                        for (int k = 0; k < bps / 8; k++) {
+                            tempByte[writePosition++] = Marshal.ReadByte(data[j], (i * 4) + k);
+                        }
                     }
                 }
-            }
-            _ = writeBufferState.Info(start: 0, length: writePosition);
-            while (writeBuffer.IsFull(writeBufferState)) {
-                Thread.Sleep(1);
-            }
-            writeBuffer.Write(tempByte, writeBufferState);
-            while (!writeBufferState.Success) {
+                _ = writeBufferState.Info(start: 0, length: writePosition);
                 if (writeBuffer.IsEndOfBuffer(writeBufferState)) {
                     if (!playing) {
                         playing = true;
@@ -195,11 +201,40 @@ namespace MultipleMusicPlayer.Decoder {
                     writeBufferState.AbsolutePosition = 0;
                 }
                 while (writeBuffer.IsFull(writeBufferState)) {
+                    if (readBuffer.IsInterrupt()) {
+                        return FLAC__StreamDecoderWriteStatus.FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+                    }
                     Thread.Sleep(1);
                 }
                 writeBuffer.Write(tempByte, writeBufferState);
+                while (!writeBufferState.Success) {
+                    if (readBuffer.IsInterrupt()) {
+                        return FLAC__StreamDecoderWriteStatus.FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+                    }
+                    if (writeBuffer.IsEndOfBuffer(writeBufferState)) {
+                        if (!playing) {
+                            playing = true;
+                            _ = portaudioSound.StartStream();
+                        }
+                        writeBufferState.AbsolutePosition = 0;
+                    }
+                    while (writeBuffer.IsFull(writeBufferState)) {
+                        if (readBuffer.IsInterrupt()) {
+                            return FLAC__StreamDecoderWriteStatus.FLAC__STREAM_DECODER_WRITE_STATUS_ABORT;
+                        }
+                        Thread.Sleep(1);
+                    }
+                    writeBuffer.Write(tempByte, writeBufferState);
+                }
+                if (seek) {
+                    _ = FLAC__stream_decoder_seek_absolute(decoder, (ulong)seekSample);
+                    portaudioSound.Abort();
+                    writeBuffer = null;
+                    playing = false;
+                    writeBufferState.AbsolutePosition = 0;
+                }
+                return FLAC__StreamDecoderWriteStatus.FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
             }
-            return FLAC__StreamDecoderWriteStatus.FLAC__STREAM_DECODER_WRITE_STATUS_CONTINUE;
         }
         private void MetadataCallbackFunction(IntPtr decoder, IntPtr metadata, IntPtr client_data) {
             lock (work) {

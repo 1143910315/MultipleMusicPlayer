@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -12,7 +13,7 @@ namespace MultipleMusicPlayer.Buffer {
         private byte[] buff;
         private readonly int bufferLength;
         private int wroteLength;
-        private readonly Buffer previous;
+        private Buffer previous;
         private Buffer next;
         private readonly int index;
         private readonly object create = new object();
@@ -159,6 +160,9 @@ namespace MultipleMusicPlayer.Buffer {
         public void Write(FileStream fileStream) {
             Buffer temp = this;
             while (fileStream.Position < fileStream.Length) {
+                if (IsInterrupt()) {
+                    return;
+                }
                 if (temp.buff == null) {
                     temp.buff = new byte[bufferLength];
                 }
@@ -168,7 +172,7 @@ namespace MultipleMusicPlayer.Buffer {
                     temp.next = temp;
 #if DEBUG
                     if (fileStream.Position < fileStream.Length) {
-                        Console.WriteLine("文件未读完却意外退出！");
+                        Debug.WriteLine("文件未读完却意外退出！");
                     }
 #endif
                     return;
@@ -231,16 +235,20 @@ namespace MultipleMusicPlayer.Buffer {
             temp.next = temp;
         }
         public bool IsInterrupt() {
-            return next == this;
+            return previous == this;
         }
-        public void SetInterrupt() {
-            next = this;
+        public void SetInterrupt(bool interrupt) {
+            previous = interrupt ? this : null;
         }
         public void Clear() {
             Buffer temp = this;
             while (temp != null) {
                 temp.Delete();
-                temp = temp.next;
+                if (temp == temp.next) {
+                    break;
+                } else {
+                    temp = temp.next;
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 ﻿using MultipleMusicPlayer.Music;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -30,16 +31,21 @@ namespace MultipleMusicPlayer
         private void Window_Loaded(object sender, RoutedEventArgs e) {
             musicList.AddDirectory("E:/kugou/");
             musicListPanel.DataContext = musicList;
+            Debug.WriteLine("123456");
         }
         private void ListBoxItem_MouseDoubleClick(object sender, MouseButtonEventArgs e) {
             if (sender is ListBoxItem item) {
                 if (item.Content is IMusic musicFile) {
                     musicFile.Play();
-                    //Console.WriteLine(musicFile.Name);
+                    //Debug.WriteLine(musicFile.Name);
                 }
-                //Console.WriteLine(item.Content.GetType());
+                //Debug.WriteLine(item.Content.GetType());
             }
-            //Console.WriteLine(sender.GetType());
+            //Debug.WriteLine(sender.GetType());
+        }
+
+        private void Window_Closing(object sender, System.ComponentModel.CancelEventArgs e) {
+            musicList.Stop();
         }
     }
 }

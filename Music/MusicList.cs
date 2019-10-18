@@ -17,6 +17,10 @@ namespace MultipleMusicPlayer.Music {
                 buffer.Clear();
                 return buffer;
             }
+            public void Stop() {
+                _music?.Stop();
+                _music = null;
+            }
         }
         public List<IMusic> FileList { get; set; } = new List<IMusic>();
         private readonly MusicControl control = new MusicControl();
@@ -36,6 +40,9 @@ namespace MultipleMusicPlayer.Music {
             if (temp != null) {
                 FileList.Add(temp);
             }
+        }
+        public void Stop() {
+            control.Stop();
         }
     }
 }
