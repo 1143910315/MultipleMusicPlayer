@@ -36,7 +36,7 @@ namespace MultipleMusicPlayer.Music {
             throw new NotImplementedException();
         }
         private void ReadFile() {
-            buffer.Read(fileStream);
+            buffer.Write(fileStream);
             fileStream.Close();
             flacDecoder.StartUntilEndOfStream();
             flacDecoder.Terminate();

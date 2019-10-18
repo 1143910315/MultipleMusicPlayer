@@ -8,7 +8,7 @@ namespace MultipleMusicPlayer.Buffer {
         void Write(byte[] b, IBufferState bufferState);
         int Read(byte[] b, IBufferState bufferState);
         int Read(IntPtr ptr, IBufferState bufferState);
-        void Read(FileStream fileStream);
+        void Write(FileStream fileStream);
         //void CreateNext();
         //int GetBufferLength(IBufferState bufferState);
         void SeekOfWrite(IBufferState bufferState);

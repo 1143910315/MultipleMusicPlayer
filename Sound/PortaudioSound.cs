@@ -15,13 +15,15 @@ namespace MultipleMusicPlayer.Sound {
         private PaStreamCallback streamCallback;
         private int channel;
         private static readonly long[] rest = { 0, 0, 0, 0, 0, 0, 0, 0 };
+        private int bps;
         public Error Initialize() {
             isInitialize = true;
             return Pa_Initialize();
         }
         public Error OpenDefaultOutputStream(int numOutputChannels, double sampleRate, uint sampleSize, out IBuffer buffer) {
             PaSampleFormat sampleFormat;
-            switch ((int)sampleSize) {
+            bps = (int)sampleSize;
+            switch (bps) {
                 case 8:
                     sampleFormat = PaSampleFormat.paInt8;
                     break;
@@ -38,8 +40,8 @@ namespace MultipleMusicPlayer.Sound {
                     buffer = null;
                     return Error.paSampleFormatNotSupported;
             }
-            buffer = outBuffer = new Buffer.Buffer(256 * numOutputChannels);
-            outBuffer.SetEndOfBuffer(new BufferState { AbsolutePosition = 256 * numOutputChannels * 2 });
+            buffer = outBuffer = new Buffer.Buffer(256 * numOutputChannels * bps / 8);
+            outBuffer.SetEndOfBuffer(new BufferState { AbsolutePosition = 256 * numOutputChannels * 20 });
             streamCallback = StreamCallback;
             channel = numOutputChannels;
             outBufferState.AbsolutePosition = 0;
@@ -50,7 +52,7 @@ namespace MultipleMusicPlayer.Sound {
         }
         private PaStreamCallbackResult StreamCallback(IntPtr input, IntPtr output, uint frameCount, ref PaStreamCallbackTimeInfo timeInfo, PaStreamCallbackFlags statusFlags, IntPtr userData) {
             if (outBuffer.IsFull(outBufferState)) {
-                outBufferState.Info(start: 0, length: (int)frameCount * channel);
+                outBufferState.Info(start: 0, length: (int)frameCount * channel * bps / 8);
                 outBuffer.Read(output, outBufferState);
                 bool success;
                 int start, length;
@@ -73,8 +75,10 @@ namespace MultipleMusicPlayer.Sound {
                 Console.WriteLine("解码速度过慢！");
 #endif
                 int times = rest.Length * 8;
+                IntPtr ptr;
                 for (int i = 0; i < frameCount * channel / times; i++) {
-                    Marshal.Copy(rest, i * times, output, rest.Length);
+                    ptr = new IntPtr(output.ToInt64() + i * times);
+                    Marshal.Copy(rest, 0, ptr, rest.Length);
                 }
             }
             return PaStreamCallbackResult.paContinue;
@@ -93,17 +97,17 @@ namespace MultipleMusicPlayer.Sound {
         }
         [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
         private delegate PaStreamCallbackResult PaStreamCallback(IntPtr input, IntPtr output, UInt32 frameCount, ref PaStreamCallbackTimeInfo timeInfo, PaStreamCallbackFlags statusFlags, IntPtr userData);
-        [DllImport("portaudio_x86.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern Error Pa_Initialize();
-        [DllImport("portaudio_x86.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern Error Pa_OpenDefaultStream(ref IntPtr stream, int numInputChannels, int numOutputChannels, PaSampleFormat sampleFormat, double sampleRate, UInt32 framesPerBuffer, PaStreamCallback streamCallback, IntPtr userData);
-        [DllImport("portaudio_x86.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern Error Pa_GetSampleSize(PaSampleFormat format);
-        [DllImport("portaudio_x86.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern Error Pa_StartStream(IntPtr stream);
-        [DllImport("portaudio_x86.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern IntPtr Pa_GetErrorText(Error errorCode);
-        [DllImport("portaudio_x86.dll", CallingConvention = CallingConvention.Cdecl)]
+        [DllImport("portaudio_x64.dll", CallingConvention = CallingConvention.Cdecl)]
         private static extern int Pa_Terminate();
         public enum Error {
             paNoError = 0,

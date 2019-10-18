@@ -6,4 +6,21 @@
     <UseWPF>true</UseWPF>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Remove="libFLAC_dynamic.dll" />
+    <None Remove="portaudio_x64.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="portaudio_x64.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="libFLAC_dynamic.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>

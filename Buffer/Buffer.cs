@@ -119,23 +119,6 @@ namespace MultipleMusicPlayer.Buffer {
             _ = bufferState.Info(actual == length, start + actual, length - actual, position + actual, temp);
             return actual;
         }
-        public void Read(FileStream fileStream) {
-            Buffer temp = this;
-            while (fileStream.Position<fileStream.Length) {
-                int length=fileStream.Read(temp.buff,0,bufferLength);
-                temp.wroteLength = length;
-                if (length< bufferLength) {
-                    temp.next = temp;
-#if DEBUG
-                    if (fileStream.Position < fileStream.Length) {
-                        Console.WriteLine("文件未读完却意外退出！");
-                    }
-#endif
-                    return;
-                }
-                temp = temp.next ?? temp.CreateNext();
-            }
-        }
         public void SeekOfWrite(IBufferState bufferState) {
             int position;
             IBuffer buffer;
@@ -172,6 +155,26 @@ namespace MultipleMusicPlayer.Buffer {
             temp = Find(buffer, position);
             int actual = temp.WriteByte(b, start, length, bufferStart);
             bufferState.Info(actual == length, start + actual, length - actual, position + actual, temp);
+        }
+        public void Write(FileStream fileStream) {
+            Buffer temp = this;
+            while (fileStream.Position < fileStream.Length) {
+                if (temp.buff == null) {
+                    temp.buff = new byte[bufferLength];
+                }
+                int length = fileStream.Read(temp.buff, 0, bufferLength);
+                temp.wroteLength = length;
+                if (length < bufferLength) {
+                    temp.next = temp;
+#if DEBUG
+                    if (fileStream.Position < fileStream.Length) {
+                        Console.WriteLine("文件未读完却意外退出！");
+                    }
+#endif
+                    return;
+                }
+                temp = temp.next ?? temp.CreateNext();
+            }
         }
         private int WriteByte(byte[] b, int start, int length, int target) {
             lock (wrote) {

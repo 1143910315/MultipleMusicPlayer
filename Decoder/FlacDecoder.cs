@@ -99,7 +99,7 @@ namespace MultipleMusicPlayer.Decoder {
                 }
                 bool complete = false;
                 int readLength = 0;
-                readBufferState.Info(start: 0, length: (int)bytes);
+                _ = readBufferState.Info(start: 0, length: (int)bytes);
                 do {
                     if (readBuffer.IsInterrupt()) {
                         return FLAC__StreamDecoderReadStatus.FLAC__STREAM_DECODER_READ_STATUS_ABORT;
@@ -172,7 +172,7 @@ namespace MultipleMusicPlayer.Decoder {
             int writePosition = 0;
             IntPtr[] data = new IntPtr[channels];
             for (int i = 0; i < channels; i++) {
-                data[i] = new IntPtr(Marshal.ReadInt32(buffer, i * 4));
+                data[i] = new IntPtr(Marshal.ReadInt64(buffer, i * 8));
             }
             for (int i = 0; i < blocksize; i++) {
                 for (int j = 0; j < channels; j++) {
@@ -189,6 +189,7 @@ namespace MultipleMusicPlayer.Decoder {
             while (!writeBufferState.Success) {
                 if (writeBuffer.IsEndOfBuffer(writeBufferState)) {
                     if (!playing) {
+                        playing = true;
                         _ = portaudioSound.StartStream();
                     }
                     writeBufferState.AbsolutePosition = 0;

@@ -17,7 +17,13 @@
             <ColumnDefinition Width="117*"/>
             <ColumnDefinition Width="283*"/>
         </Grid.ColumnDefinitions>
-        <ListBox Grid.Row="1" ItemsSource="{Binding FileList}" DisplayMemberPath="Name"></ListBox>
+        <ListBox Grid.Row="1" ItemsSource="{Binding FileList}" DisplayMemberPath="Name">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="{x:Type ListBoxItem}" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                    <EventSetter Event="MouseDoubleClick" Handler="ListBoxItem_MouseDoubleClick"/>
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
 
     </Grid>
 </Window>

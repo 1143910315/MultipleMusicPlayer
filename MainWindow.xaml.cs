@@ -31,5 +31,15 @@ namespace MultipleMusicPlayer
             musicList.AddDirectory("E:/kugou/");
             musicListPanel.DataContext = musicList;
         }
+        private void ListBoxItem_MouseDoubleClick(object sender, MouseButtonEventArgs e) {
+            if (sender is ListBoxItem item) {
+                if (item.Content is IMusic musicFile) {
+                    musicFile.Play();
+                    //Console.WriteLine(musicFile.Name);
+                }
+                //Console.WriteLine(item.Content.GetType());
+            }
+            //Console.WriteLine(sender.GetType());
+        }
     }
 }
